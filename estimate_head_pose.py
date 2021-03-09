@@ -1,16 +1,23 @@
 """Demo code shows how to estimate human head pose.
-Currently, human face is detected by a detector from an OpenCV DNN module.
-Then the face box is modified a little to suits the need of landmark
-detection. The facial landmark detection is done by a custom Convolutional
-Neural Network trained with TensorFlow. After that, head pose is estimated
-by solving a PnP problem.
+
+Three major steps for this code.
+
+Step 1: face detection. The human faces are detected by a deep learning face
+    face_detector .Then the face boxes are modified a little to suits the need of
+    landmark detection.
+Step 2: facial landmark detection. This is done by a custom Convolutional
+    Neural Network trained with TensorFlow.
+Step 3: head pose estimation. The pose is estimated by solving a PnP problem.
+
+All models and training code are available at: https://github.com/yinguobing/head-pose-estimation
 """
 from argparse import ArgumentParser
-from multiprocessing import Process, Queue
 
 import cv2
 import numpy as np
+import tensorflow as tf
 
+from face_detector import FaceDetector
 from mark_detector import MarkDetector
 from os_detector import detect_os
 from pose_estimator import PoseEstimator
@@ -18,12 +25,12 @@ from stabilizer import Stabilizer
 
 print("OpenCV version: {}".format(cv2.__version__))
 
-# multiprocessing may not work on Windows and macOS, check OS for safety.
-detect_os()
+tf.config.run_functions_eagerly(False)
+devices = tf.config.list_physical_devices('GPU')
+for device in devices:
+    tf.config.experimental.set_memory_growth(device, True)
 
-CNN_INPUT_SIZE = 128
-
-# Take arguments from user input.
+# Parse arguments from user inputs.
 parser = ArgumentParser()
 parser.add_argument("--video", type=str, default=None,
                     help="Video file to be processed.")
@@ -32,41 +39,36 @@ parser.add_argument("--cam", type=int, default=None,
 args = parser.parse_args()
 
 
-def get_face(detector, img_queue, box_queue):
-    """Get face from image queue. This function is used for multiprocessing"""
-    while True:
-        image = img_queue.get()
-        box = detector.extract_cnn_facebox(image)
-        box_queue.put(box)
-
-
 def main():
-    """MAIN"""
-    # Video source from webcam or video file.
+    """Run human head pose estimation from video files."""
+
+    # What is the threshold value for face detection.
+    threshold = 0.5
+
+    # Setup the video source. If no video file provided, the default webcam will
+    # be used.
     video_src = args.cam if args.cam is not None else args.video
     if video_src is None:
         print("Warning: video source not assigned, default webcam will be used.")
         video_src = 0
 
     cap = cv2.VideoCapture(video_src)
+
+    # If reading frames from a webcam, try setting the camera resolution.
     if video_src == 0:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    _, sample_frame = cap.read()
 
-    # Introduce mark_detector to detect landmarks.
-    mark_detector = MarkDetector()
+    # Get the real frame resolution.
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Setup process and queues for multiprocessing.
-    img_queue = Queue()
-    box_queue = Queue()
-    img_queue.put(sample_frame)
-    box_process = Process(target=get_face, args=(
-        mark_detector, img_queue, box_queue,))
-    box_process.start()
+    # Introduce a mark_face_detector to detect face marks.
+    detector_mark = MarkDetector("assets/mark_model")
 
-    # Introduce pose estimator to solve pose. Get one frame to setup the
-    # estimator according to the image size.
-    height, width = sample_frame.shape[:2]
+    # Introduce a face face_detector to detect human faces.
+    detector_face = FaceDetector("assets/face_model")
+
+    # Introduce pose estimator to solve pose.
     pose_estimator = PoseEstimator(img_size=(height, width))
 
     # Introduce scalar stabilizers for pose.
@@ -76,9 +78,13 @@ def main():
         cov_process=0.1,
         cov_measure=0.1) for _ in range(6)]
 
+    # Introduce a metter to measure the FPS.
     tm = cv2.TickMeter()
 
+    # Loop through the video frames.
     while True:
+        tm.start()
+
         # Read frame, crop it, flip it, suits your needs.
         frame_got, frame = cap.read()
         if frame_got is False:
@@ -91,38 +97,40 @@ def main():
         if video_src == 0:
             frame = cv2.flip(frame, 2)
 
-        # Pose estimation by 3 steps:
-        # 1. detect face;
-        # 2. detect landmarks;
-        # 3. estimate pose
+        # Preprocess the input image.
+        _image = detector_face.preprocess(frame)
 
-        # Feed frame to image queue.
-        img_queue.put(frame)
+        # Run the model
+        boxes, scores, classes = detector_face.predict(_image, threshold)
 
-        # Get face from box queue.
-        facebox = box_queue.get()
+        # Transform the boxes into squares.
+        boxes = detector_face.transform_to_square(
+            boxes, scale=1.22, offset=(0, 0.13))
 
-        if facebox is not None:
-            # Detect landmarks from image of 128x128.
-            face_img = frame[facebox[1]: facebox[3],
-                             facebox[0]: facebox[2]]
-            face_img = cv2.resize(face_img, (CNN_INPUT_SIZE, CNN_INPUT_SIZE))
-            face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
+        # Clip the boxes if they cross the image boundaries.
+        boxes, _ = detector_face.clip_boxes(boxes, (0, 0, height, width))
 
-            tm.start()
-            marks = mark_detector.detect_marks(face_img)
-            tm.stop()
+        # Detect facial marks.
+        if boxes.size > 0:
+            # Get one face image.
+            facebox = boxes[0]
+            top, left, bottom, right = [int(x) for x in facebox]
+            face_image = frame[top:bottom, left:right]
+
+            # Run detection.
+            face_image = detector_mark.preprocess(face_image)
+            marks = detector_mark.predict(face_image)
 
             # Convert the marks locations from local CNN to global image.
-            marks *= (facebox[2] - facebox[0])
-            marks[:, 0] += facebox[0]
-            marks[:, 1] += facebox[1]
-
-            # Uncomment following line to show raw marks.
-            # mark_detector.draw_marks(frame, marks, color=(0, 255, 0))
+            marks *= (right - left)
+            marks[:, 0] += left
+            marks[:, 1] += top
 
             # Uncomment following line to show facebox.
-            # mark_detector.draw_box(frame, [facebox])
+            # detector_face.draw_box(frame, facebox, scores[0])
+
+            # Uncomment following line to show raw marks.
+            detector_mark.draw_marks(frame, marks, color=(0, 255, 0))
 
             # Try pose estimation with 68 points.
             pose = pose_estimator.solve_pose_by_68_points(marks)
@@ -141,19 +149,21 @@ def main():
 
             # Uncomment following line to draw stabile pose annotation on frame.
             pose_estimator.draw_annotation_box(
-                frame, steady_pose[0], steady_pose[1], color=(128, 255, 128))
+            frame, steady_pose[0], steady_pose[1], color=(128, 255, 128))
 
             # Uncomment following line to draw head axes on frame.
-            # pose_estimator.draw_axes(frame, steady_pose[0], steady_pose[1])
+            pose_estimator.draw_axes(frame, steady_pose[0], steady_pose[1])
+
+        tm.stop()
+
+        # Draw FPS on the screen's top left corner.
+        cv2.putText(frame, "FPS: {:.0f}".format(tm.getFPS()), (24, 24),
+                    cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Show preview.
         cv2.imshow("Preview", frame)
-        if cv2.waitKey(10) == 27:
+        if cv2.waitKey(1) == 27:
             break
-
-    # Clean up the multiprocessing process.
-    box_process.terminate()
-    box_process.join()
 
 
 if __name__ == '__main__':
