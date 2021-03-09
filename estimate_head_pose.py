@@ -25,7 +25,6 @@ from stabilizer import Stabilizer
 
 print("OpenCV version: {}".format(cv2.__version__))
 
-tf.config.run_functions_eagerly(False)
 devices = tf.config.list_physical_devices('GPU')
 for device in devices:
     tf.config.experimental.set_memory_growth(device, True)
