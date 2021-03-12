@@ -228,7 +228,7 @@ def predict_video():
         if args.speed:
             if i % fps == fps - 1:
                 print("Predicted %d frame(s) in %.5f second(s). %.5f frames/s" %
-                      (i, time.perf_counter() - start, i // (time.perf_counter() - start)))
+                      (i, time.perf_counter() - start, i / (time.perf_counter() - start)))
 
     # Clean up the multiprocessing process.
     box_process.terminate()
