@@ -1,6 +1,9 @@
 """Estimate head pose according to the facial landmarks"""
+import math
 import cv2
 import numpy as np
+
+from scipy.spatial.transform import Rotation
 
 
 class PoseEstimator:
@@ -88,7 +91,7 @@ class PoseEstimator:
         #     useExtrinsicGuess=True)
         return (rotation_vector, translation_vector)
 
-    def solve_pose_by_68_points(self, image_points):
+    def solve_pose_by_68_points(self, image_points, return_euler=True):
         """
         Solve pose from all the 68 image points
         Return (rotation_vector, translation_vector) as pose.
@@ -96,7 +99,7 @@ class PoseEstimator:
 
         if self.r_vec is None:
             (_, rotation_vector, translation_vector) = cv2.solvePnP(
-                self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs)
+                self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs, flags=cv2.SOLVEPNP_EPNP)
             self.r_vec = rotation_vector
             self.t_vec = translation_vector
 
@@ -107,9 +110,35 @@ class PoseEstimator:
             self.dist_coeefs,
             rvec=self.r_vec,
             tvec=self.t_vec,
-            useExtrinsicGuess=True)
+            useExtrinsicGuess=True,
+            flags=cv2.SOLVEPNP_EPNP)
 
-        return (rotation_vector, translation_vector)
+        if return_euler:
+            return PoseEstimator.r_vec_to_euler(rotation_vector)
+        return rotation_vector, translation_vector
+
+    def solve_pose_by_68_points_img(self, image_points, return_euler=True):
+        """
+        Solve pose from all the 68 image points
+        Return (rotation_vector, translation_vector) as pose.
+        """
+
+        (_, rotation_vector, translation_vector) = cv2.solvePnP(
+            self.model_points_68, image_points, self.camera_matrix, self.dist_coeefs, flags=cv2.SOLVEPNP_EPNP)
+
+        if return_euler:
+            return PoseEstimator.r_vec_to_euler(rotation_vector)
+        return rotation_vector, translation_vector
+
+    @staticmethod
+    def r_vec_to_euler(r_vec):
+        r = Rotation.from_rotvec(r_vec.flatten())
+        # ZYX_Intrinsic = "ZYX"
+        # XYZ_Extrinsic = "xyz"
+        # XYZ_Intrinsic = "XYZ"
+        # ZYX_Extrinsic = "zyx"
+        pitch, yaw, roll = r.as_euler("XYZ", degrees=True)
+        return pitch, -yaw, roll
 
     def draw_annotation_box(self, image, rotation_vector, translation_vector, color=(255, 255, 255), line_width=2,
                             rear_size=75, rear_depth=0, front_size=100, front_depth=100):
@@ -162,8 +191,36 @@ class PoseEstimator:
     def draw_axes(self, img, R, t):
         img	= cv2.drawFrameAxes(img, self.camera_matrix, self.dist_coeefs, R, t, 30)
 
+    @staticmethod
+    def draw_axes_euler(img, yaw, pitch, roll, tdx=None, tdy=None, size=100,
+                        x_color=(0, 0, 255), y_color=(0, 255, 0), z_color=(255, 0, 0)):
+        pitch = pitch * np.pi / 180
+        yaw = -(yaw * np.pi / 180)
+        roll = roll * np.pi / 180
 
-    def get_pose_marks(self, marks):
+        if not tdx or not tdy:
+            height, width = img.shape[:2]
+            tdx = width / 2
+            tdy = height / 2
+
+        # X-Axis pointing to right | drawn in red
+        x1 = size * (math.cos(yaw) * math.cos(roll)) + tdx
+        y1 = size * (math.cos(pitch) * math.sin(roll) + math.cos(roll) * math.sin(pitch) * math.sin(yaw)) + tdy
+
+        # Y-Axis | drawn in green
+        x2 = size * (-math.cos(yaw) * math.sin(roll)) + tdx
+        y2 = size * (math.cos(pitch) * math.cos(roll) - math.sin(pitch) * math.sin(yaw) * math.sin(roll)) + tdy
+
+        # Z-Axis (out of the screen) | drawn in blue
+        x3 = size * (math.sin(yaw)) + tdx
+        y3 = size * (-math.cos(yaw) * math.sin(pitch)) + tdy
+
+        cv2.line(img, (int(tdx), int(tdy)), (int(x1), int(y1)), x_color, 3)
+        cv2.line(img, (int(tdx), int(tdy)), (int(x2), int(y2)), y_color, 3)
+        cv2.line(img, (int(tdx), int(tdy)), (int(x3), int(y3)), z_color, 2)
+
+    @staticmethod
+    def get_pose_marks(marks):
         """Get marks ready for pose estimation from 68 marks"""
         pose_marks = []
         pose_marks.append(marks[30])    # Nose tip

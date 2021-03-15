@@ -74,17 +74,21 @@ def predict_img():
         marks[:, 1] += facebox[1]
 
         # Uncomment following line to show raw marks.
-        # mark_detector.draw_marks(img, marks, color=(0, 255, 0))
+        mark_detector.draw_marks(img, marks, color=(0, 255, 0))
 
         # Uncomment following line to show facebox.
-        # mark_detector.draw_box(img, [facebox])
+        mark_detector.draw_box(img, [facebox])
 
         # Try pose estimation with 68 points.
-        pose = pose_estimator.solve_pose_by_68_points(marks)
+        pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
+
+        # Uncomment following line to draw head exes on img with euler angles.
+        nose = marks[33] # nose point in 68 points
+        PoseEstimator.draw_axes_euler(img, yaw, pitch, roll, nose[0], nose[1])
 
         # Uncomment following line to draw pose annotation on img.
-        pose_estimator.draw_annotation_box(
-            img, pose[0], pose[1], color=(255, 128, 128))
+        # pose_estimator.draw_annotation_box(
+        #     img, pose[0], pose[1], color=(255, 128, 128))
 
         # Uncomment following line to draw head axes on img.
         # pose_estimator.draw_axes(img, steady_pose[0], steady_pose[1])
@@ -195,24 +199,28 @@ def predict_video():
             # mark_detector.draw_box(frame, [facebox])
 
             # Try pose estimation with 68 points.
-            pose = pose_estimator.solve_pose_by_68_points(marks)
+            pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
 
             # Stabilize the pose.
-            steady_pose = []
-            pose_np = np.array(pose).flatten()
-            for value, ps_stb in zip(pose_np, pose_stabilizers):
-                ps_stb.update([value])
-                steady_pose.append(ps_stb.state[0])
-            steady_pose = np.reshape(steady_pose, (-1, 3))
+            # steady_pose = []
+            # pose_np = np.array(pose).flatten()
+            # for value, ps_stb in zip(pose_np, pose_stabilizers):
+            #     ps_stb.update([value])
+            #     steady_pose.append(ps_stb.state[0])
+            # steady_pose = np.reshape(steady_pose, (-1, 3))
 
             # Uncomment following line to draw pose annotation on frame.
             # pose_estimator.draw_annotation_box(
             #     frame, pose[0], pose[1], color=(255, 128, 128))
 
             # Uncomment following line to draw stabile pose annotation on frame.
-            pose_estimator.draw_annotation_box(
-                frame, steady_pose[0], steady_pose[1], color=(128, 255, 128)
-            )
+            # pose_estimator.draw_annotation_box(
+            #     frame, steady_pose[0], steady_pose[1], color=(128, 255, 128)
+            # )
+
+            # Uncomment following line to draw head exes on img with euler angles.
+            nose = marks[33]  # nose point in 68 points
+            PoseEstimator.draw_axes_euler(frame, yaw, pitch, roll, nose[0], nose[1])
 
             # Uncomment following line to draw head axes on frame.
             # pose_estimator.draw_axes(frame, steady_pose[0], steady_pose[1])
