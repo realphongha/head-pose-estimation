@@ -39,7 +39,7 @@ def landmarks_to_angles_model():
     return model
 
 
-def to_angles(model, landmarks):
+def to_angles(landmarks, model):
     if MODEL_CONFIG["n_points"] == 68:
         landmarks = landmarks
     elif MODEL_CONFIG["n_points"] in mapping_points:
