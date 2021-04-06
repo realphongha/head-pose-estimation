@@ -75,12 +75,13 @@ class MarkDetector:
         self.model = keras.models.load_model(saved_model)
 
     @staticmethod
-    def draw_box(image, boxes, box_color=(255, 255, 255)):
+    def draw_box(image, boxes, texts, box_color=(255, 255, 255), text_color=(255, 255, 0), font_scale=0.7):
         """Draw square boxes on image"""
-        for box in boxes:
-            cv2.rectangle(image,
-                          (box[0], box[1]),
-                          (box[2], box[3]), box_color, 3)
+        for i in range(len(boxes)):
+            box = boxes[i]
+            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), box_color, 3)
+            cv2.putText(image, texts[i], (box[0], box[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, 3)
 
     @staticmethod
     def move_box(box, offset):

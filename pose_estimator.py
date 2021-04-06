@@ -174,6 +174,50 @@ class PoseEstimator:
         cv2.line(image, tuple(point_2d[3]), tuple(
             point_2d[8]), color, line_width, cv2.LINE_AA)
 
+    @staticmethod
+    def plot_pose_cube(img, yaw, pitch, roll, tdx=None, tdy=None, size=150.):
+        # Input is a cv2 image
+        # pose_params: (pitch, yaw, roll, tdx, tdy)
+        # Where (tdx, tdy) is the translation of the face.
+        # For pose we have [pitch yaw roll tdx tdy tdz scale_factor]
+
+        p = pitch * np.pi / 180
+        y = -(yaw * np.pi / 180)
+        r = roll * np.pi / 180
+        if tdx is not None and tdy is not None:
+            face_x = tdx - 0.50 * size
+            face_y = tdy - 0.50 * size
+        else:
+            height, width = img.shape[:2]
+            face_x = width / 2 - 0.5 * size
+            face_y = height / 2 - 0.5 * size
+
+        x1 = size * (math.cos(y) * math.cos(r)) + face_x
+        y1 = size * (math.cos(p) * math.sin(r) + math.cos(r) * math.sin(p) * math.sin(y)) + face_y
+        x2 = size * (-math.cos(y) * math.sin(r)) + face_x
+        y2 = size * (math.cos(p) * math.cos(r) - math.sin(p) * math.sin(y) * math.sin(r)) + face_y
+        x3 = size * (math.sin(y)) + face_x
+        y3 = size * (-math.cos(y) * math.sin(p)) + face_y
+
+        # Draw base in red
+        cv2.line(img, (int(face_x), int(face_y)), (int(x1), int(y1)), (0, 0, 255), 3)
+        cv2.line(img, (int(face_x), int(face_y)), (int(x2), int(y2)), (0, 0, 255), 3)
+        cv2.line(img, (int(x2), int(y2)), (int(x2 + x1 - face_x), int(y2 + y1 - face_y)), (0, 0, 255), 3)
+        cv2.line(img, (int(x1), int(y1)), (int(x1 + x2 - face_x), int(y1 + y2 - face_y)), (0, 0, 255), 3)
+        # Draw pillars in blue
+        cv2.line(img, (int(face_x), int(face_y)), (int(x3), int(y3)), (255, 0, 0), 2)
+        cv2.line(img, (int(x1), int(y1)), (int(x1 + x3 - face_x), int(y1 + y3 - face_y)), (255, 0, 0), 2)
+        cv2.line(img, (int(x2), int(y2)), (int(x2 + x3 - face_x), int(y2 + y3 - face_y)), (255, 0, 0), 2)
+        cv2.line(img, (int(x2 + x1 - face_x), int(y2 + y1 - face_y)),
+                 (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), (255, 0, 0), 2)
+        # Draw top in green
+        cv2.line(img, (int(x3 + x1 - face_x), int(y3 + y1 - face_y)),
+                 (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), (0, 255, 0), 2)
+        cv2.line(img, (int(x2 + x3 - face_x), int(y2 + y3 - face_y)),
+                 (int(x3 + x1 + x2 - 2 * face_x), int(y3 + y2 + y1 - 2 * face_y)), (0, 255, 0), 2)
+        cv2.line(img, (int(x3), int(y3)), (int(x3 + x1 - face_x), int(y3 + y1 - face_y)), (0, 255, 0), 2)
+        cv2.line(img, (int(x3), int(y3)), (int(x3 + x2 - face_x), int(y3 + y2 - face_y)), (0, 255, 0), 2)
+
     def draw_axis(self, img, R, t):
         points = np.float32(
             [[30, 0, 0], [0, 30, 0], [0, 0, 30], [0, 0, 0]]).reshape(-1, 3)

@@ -8,7 +8,7 @@ from math import pi, atan2, asin, cos, sin
 
 from mark_detector import MarkDetector
 from pose_estimator import PoseEstimator
-from utils.annotation import read_mat_annotation, conv_98p_to_68p
+from utils.annotation import read_mat_annotation, conv_98p_to_68p, landmarks_to_facebox
 from utils.functional import r_vec_to_euler
 
 
@@ -32,8 +32,10 @@ def main1():
         raw_landmarks = list(map(float, sample.split()[:-1]))
         landmarks = conv_98p_to_68p(get_landmarks_in_pair(raw_landmarks))
         img_filename = sample.split()[-1]
+        print("Processing %s..." % img_filename)
         path_to_img = os.path.join(img_path, img_filename)
         img = cv2.imread(path_to_img)
+        cv2.imwrite(os.path.join("output", "%s-original.jpg" % Path(path_to_img).stem), img)
         height, width = img.shape[:2]
         pose_estimator = PoseEstimator(img_size=(height, width))
         mark_detector = MarkDetector()
@@ -41,12 +43,13 @@ def main1():
         # cv2.imwrite(os.path.join("output", "%s-mark.jpg" % Path(path_to_img).stem), img)
         pose = pose_estimator.solve_pose_by_68_points_img(landmarks, return_euler=False)
         p, y, r = pose_estimator.r_vec_to_euler(pose[0])
+        mark_detector.draw_box(img, [landmarks_to_facebox(landmarks)],
+                               ["Y: %.2f, P: %.2f, R: %.2f" % (y, p, r)])
         # pose_estimator.draw_annotation_box(img, pose[0], pose[1], color=(255, 128, 128))
-        pose_estimator.draw_axes(img, pose[0], pose[1])
+        # pose_estimator.draw_axes(img, pose[0], pose[1])
         # cv2.imwrite(os.path.join("output", "%s-pose.jpg" % Path(path_to_img).stem), img)
         # landmarks[33] is the nose point
-        PoseEstimator.draw_axes_euler(img, y, p, r, tdx=landmarks[33][0], tdy=landmarks[33][1],
-                        x_color=(0, 0, 100), y_color=(0, 100, 0), z_color=(100, 0, 0))
+        PoseEstimator.draw_axes_euler(img, y, p, r, tdx=landmarks[33][0], tdy=landmarks[33][1])
         cv2.imwrite(os.path.join("output", "%s-ypr-pose.jpg" % Path(path_to_img).stem), img)
 
 
@@ -58,7 +61,6 @@ def main2():
     for file in list_file[:n_samples]:
         img_path = os.path.join(root_path, file)
         mat_path = os.path.join(root_path, file.replace("jpg", "mat"))
-        print(mat_path)
         landmarks, euler_angles, face_box = read_mat_annotation(mat_path)
         pitch, yaw, roll = euler_angles
         img = cv2.imread(img_path)
@@ -82,4 +84,4 @@ def main2():
 
 
 if __name__ == "__main__":
-    main2()
+    main1()

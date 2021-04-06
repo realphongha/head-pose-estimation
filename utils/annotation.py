@@ -19,3 +19,11 @@ def read_mat_annotation(mat_file):
     x_max = max(pt[0, :])
     y_max = max(pt[1, :])
     return landmarks, (pitch, yaw, roll), (x_min, y_min, x_max, y_max)
+
+
+def landmarks_to_facebox(landmarks, get_int=True):
+    pt_x = [mark[0] for mark in landmarks]
+    pt_y = [mark[1] for mark in landmarks]
+    if get_int:
+        return int(min(pt_x)), int(min(pt_y)), int(max(pt_x)), int(max(pt_y))
+    return min(pt_x), min(pt_y), max(pt_x), max(pt_y)

@@ -16,6 +16,7 @@ from pathlib import Path
 from mark_detector import MarkDetector
 from os_detector import detect_os
 from pose_estimator import PoseEstimator
+from landmarks_to_angles import landmarks_to_angles
 from stabilizer import Stabilizer
 
 print("OpenCV version: {}".format(cv2.__version__))
@@ -76,15 +77,24 @@ def predict_img():
         # Uncomment following line to show raw marks.
         mark_detector.draw_marks(img, marks, color=(0, 255, 0))
 
-        # Uncomment following line to show facebox.
-        mark_detector.draw_box(img, [facebox])
-
+        yaw, pitch, roll = landmarks_to_angles.to_angles(marks)
         # Try pose estimation with 68 points.
-        pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
+        # pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
+
+        # Uncomment following line to show facebox.
+        # mark_detector.draw_box(img, [facebox], ["Y: %.2f, P: %.2f, R: %.2f" % (yaw, pitch, roll)])
 
         # Uncomment following line to draw head exes on img with euler angles.
-        nose = marks[33] # nose point in 68 points
-        PoseEstimator.draw_axes_euler(img, yaw, pitch, roll, nose[0], nose[1])
+        nose = marks[33]  # nose point in 68 points
+        # PoseEstimator.draw_axes_euler(img, yaw, pitch, roll, nose[0], nose[1])
+        x_max = max(map(lambda x: x[0], marks))
+        x_min = min(map(lambda x: x[0], marks))
+        y_max = max(map(lambda x: x[1], marks))
+        y_min = min(map(lambda x: x[1], marks))
+        size_x = x_max - x_min
+        size_y = y_max - y_min
+        PoseEstimator.plot_pose_cube(img, yaw, pitch, roll, (x_max + x_min) / 2, (y_max + y_min) / 2,
+                                     size_x if size_x > size_y else size_y)
 
         # Uncomment following line to draw pose annotation on img.
         # pose_estimator.draw_annotation_box(
@@ -196,10 +206,11 @@ def predict_video():
             # mark_detector.draw_marks(frame, marks, color=(0, 255, 0))
 
             # Uncomment following line to show facebox.
-            # mark_detector.draw_box(frame, [facebox])
+            # mark_detector.draw_box(frame, [facebox], mark_detector.draw_box(img, [facebox], ["Y: %.2f, P: %.2f, R: %.2f" % (yaw, pitch, roll)]))
 
+            yaw, pitch, roll = landmarks_to_angles.to_angles(marks)
             # Try pose estimation with 68 points.
-            pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
+            # pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
 
             # Stabilize the pose.
             # steady_pose = []
