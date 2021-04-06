@@ -27,13 +27,19 @@ def predict(model, landmarks):
     landmarks = torch.tensor(landmarks)
     if torch.cuda.is_available():
         landmarks = landmarks.cuda().float()
-    landmarks = torch.unsqueeze(landmarks, 0) # add batch dimension
+    landmarks = torch.unsqueeze(landmarks, 0)  # add batch dimension
     outputs = model(landmarks)
     outputs = outputs.cpu().detach().numpy()
     return outputs
 
 
-def to_angles(landmarks):
+def landmarks_to_angles_model():
+    checkpoint_abs_path = os.path.join(os.path.split(os.path.abspath(inspect.getfile(predict)))[0], CHECKPOINT)
+    model = init_model(MODEL_CONFIG, checkpoint_abs_path)
+    return model
+
+
+def to_angles(model, landmarks):
     if MODEL_CONFIG["n_points"] == 68:
         landmarks = landmarks
     elif MODEL_CONFIG["n_points"] in mapping_points:
@@ -47,12 +53,7 @@ def to_angles(landmarks):
         landmarks = landmarks_to_dist_angles(landmarks)
     else:
         landmarks = normalize_landmarks(standardize_landmarks(landmarks))
-
-    checkpoint_abs_path = os.path.join(os.path.split(os.path.abspath(inspect.getfile(predict)))[0], CHECKPOINT)
-
-    model = init_model(MODEL_CONFIG, checkpoint_abs_path)
     pose = predict(model, landmarks)[0]
-
     return pose
 
 

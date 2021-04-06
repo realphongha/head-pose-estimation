@@ -77,7 +77,8 @@ def predict_img():
         # Uncomment following line to show raw marks.
         mark_detector.draw_marks(img, marks, color=(0, 255, 0))
 
-        yaw, pitch, roll = landmarks_to_angles.to_angles(marks)
+        marks_to_angles_model = landmarks_to_angles.landmarks_to_angles_model()
+        yaw, pitch, roll = landmarks_to_angles.to_angles(marks, marks_to_angles_model)
         # Try pose estimation with 68 points.
         # pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
 
@@ -149,6 +150,8 @@ def predict_video():
     height, width = sample_frame.shape[:2]
     pose_estimator = PoseEstimator(img_size=(height, width))
 
+    marks_to_angles_model = landmarks_to_angles.landmarks_to_angles_model()
+
     # Introduce scalar stabilizers for pose.
     pose_stabilizers = [Stabilizer(
         state_num=2,
@@ -208,7 +211,7 @@ def predict_video():
             # Uncomment following line to show facebox.
             # mark_detector.draw_box(frame, [facebox], mark_detector.draw_box(img, [facebox], ["Y: %.2f, P: %.2f, R: %.2f" % (yaw, pitch, roll)]))
 
-            yaw, pitch, roll = landmarks_to_angles.to_angles(marks)
+            yaw, pitch, roll = landmarks_to_angles.to_angles(marks, marks_to_angles_model)
             # Try pose estimation with 68 points.
             # pitch, yaw, roll = pose_estimator.solve_pose_by_68_points(marks)
 
